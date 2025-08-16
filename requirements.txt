@@ -1,0 +1,29 @@
+# Core HTTP and parsing
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+
+# Content extraction (HTML boilerplate removal)
+trafilatura>=1.9.0
+
+# Browser automation fallback for JS-heavy pages (Twitter/X, etc.)
+selenium>=4.21.0
+webdriver-manager>=4.0.1
+
+# LangChain for RAG pipeline utilities
+langchain>=0.2.0
+langchain-text-splitters>=0.0.1
+langchain-openai>=0.1.16
+
+# Neo4j driver for graph inserts
+neo4j>=5.23.0
+
+# Load environment variables from .env
+python-dotenv>=1.0.1
+
+# OpenAI Python SDK (direct usage)
+openai>=1.37.0
+
+# Gemini LangExtract for entity extraction
+langextract>=0.1.0
+
+
