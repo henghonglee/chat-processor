@@ -1,0 +1,10 @@
+# Ignore data folders
+chats/
+chats-ir/
+chats-ir-chunked/
+chats-processed/
+exports/
+.env
+url_cache.csv
+__pycache__
+
