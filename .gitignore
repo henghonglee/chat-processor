@@ -1,9 +1,14 @@
 # Ignore data folders
+vector_store/
 chats/
-chats-ir/
-chats-ir-chunked/
+chats-parsed/
+chats-parsed-chunked/
 chats-processed/
+chats-enriched/
+cypher-queries/
+cypher-processed/
 exports/
+out/
 .env
 url_cache.csv
 __pycache__
