@@ -17,12 +17,12 @@ class RerankConfig:
     """Configuration for reranking step."""
 
     # Model selection
-    method: str = "cross-encoder"  # zerank, cross-encoder, cohere, jina
-    model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    method: str = "zerank"  # zerank, cross-encoder, cohere, jina
+    model_name: str = "zerank/zerank-v2-large"
 
     # Reranking parameters
-    top_k_before: int = 50    # How many results to rerank
-    top_k_after: int = 20     # How many to return after reranking
+    top_k_before: int = 500   # How many results to rerank
+    top_k_after: int = 50     # How many to return after reranking
     min_score_threshold: float = 0.0
 
     # Feature toggles

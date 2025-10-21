@@ -266,32 +266,6 @@ class QueryExpander(BaseQueryStep):
             self.logger.info(f"{query_name} - No results returned")
             return
 
-        self.logger.info(f"{query_name} - Detailed Results:")
-        self.logger.info("-" * 60)
-
-        for i, record in enumerate(records[: self.max_logged_records], 1):
-            self.logger.info(f"Record {i}:")
-            for record_key, value in record.items():
-                if hasattr(value, "labels") and hasattr(value, "id"):  # Node
-                    self.logger.info(
-                        f"  {record_key}: Node(id={value.id}, labels={list(value.labels)}, properties={dict(value)})"
-                    )
-                elif hasattr(value, "type") and hasattr(
-                    value, "start_node"
-                ):  # Relationship
-                    self.logger.info(
-                        f"  {record_key}: Relationship(type={value.type}, properties={dict(value)})"
-                    )
-                else:  # Other values
-                    self.logger.info(f"  {record_key}: {value}")
-            self.logger.info("-" * 30)
-
-        if len(records) > self.max_logged_records:
-            self.logger.info(
-                f"... and {len(records) - self.max_logged_records} more records"
-            )
-
-        self.logger.info("-" * 60)
 
     def _process_query_results(
         self,

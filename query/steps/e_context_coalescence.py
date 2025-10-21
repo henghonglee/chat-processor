@@ -133,6 +133,37 @@ class ContextCoalescer(BaseQueryStep):
         sections.append(f"### {graph_context}")
         return "\n".join(sections)
 
+    def format_search_results(self, search_results) -> str:
+        """
+        Format search results for the system prompt when graph context is not available.
+
+        Args:
+            search_results: The search results object (VectorSearchResults)
+
+        Returns:
+            Formatted context string
+        """
+        sections = []
+        sections.append("## Search Results")
+        sections.append(f"Found {len(search_results.results)} relevant documents:")
+
+        for i, result in enumerate(search_results.results[:20], 1):  # Limit to top 20
+            sections.append(f"\n### Result {i}")
+            sections.append(f"**Source:** {result.chat_name}")
+            sections.append(f"**Type:** {result.node_type}")
+            sections.append(f"**Relevance Score:** {result.similarity_score:.4f}")
+
+            # Truncate text if too long
+            text = result.document_text
+            if len(text) > 1000:
+                text = text[:1000] + "..."
+            sections.append(f"**Content:** {text}")
+
+        if len(search_results.results) > 20:
+            sections.append(f"\n... and {len(search_results.results) - 20} more results")
+
+        return "\n".join(sections)
+
     def estimate_tokens(self, text: str) -> int:
         """
         Estimate the number of tokens in the given text.
@@ -157,14 +188,15 @@ class ContextCoalescer(BaseQueryStep):
         return template_path.read_text(encoding="utf-8")
 
     def build_system_prompt(
-        self, graph_context: GraphContext, user_query: str
+        self, graph_context: GraphContext, user_query: str, search_results: any = None
     ) -> SystemPrompt:
         """
-        Build the complete system prompt from the GraphContext.
+        Build the complete system prompt from the GraphContext or search results.
 
         Args:
             graph_context: The GraphContext with query results
             user_query: The original user query
+            search_results: Search results to use when graph context is empty
 
         Returns:
             SystemPrompt object with the complete prompt
@@ -174,13 +206,32 @@ class ContextCoalescer(BaseQueryStep):
         # Load prompt template
         template = self.load_prompt_template()
 
-        # Context overview
-        query_results = getattr(graph_context, "query_results", [])
-        num_results = len(query_results)
-        total_records = sum(len(result.get("records", [])) for result in query_results)
+        # Check if we have meaningful graph context or need to use search results
+        has_graph_data = (
+            len(graph_context.entities) > 0 or
+            len(graph_context.people) > 0 or
+            len(graph_context.claims) > 0 or
+            len(graph_context.said_relationships) > 0 or
+            len(graph_context.mention_relationships) > 0 or
+            len(graph_context.reaction_relationships) > 0
+        )
 
-        # Format graph context
-        formatted_results = self.format_graph_context(graph_context)
+        if has_graph_data:
+            # Use graph context (normal case when graph search is enabled)
+            query_results = getattr(graph_context, "query_results", [])
+            num_results = len(query_results)
+            total_records = sum(len(result.get("records", [])) for result in query_results)
+            formatted_results = self.format_graph_context(graph_context)
+        elif search_results and hasattr(search_results, 'results') and len(search_results.results) > 0:
+            # Use search results when graph context is empty (graph search disabled)
+            num_results = len(search_results.results)
+            total_records = len(search_results.results)
+            formatted_results = self.format_search_results(search_results)
+        else:
+            # No context available
+            num_results = 0
+            total_records = 0
+            formatted_results = "No relevant information found in the knowledge base."
 
         # Fill in template variables
         full_prompt = template.format(
@@ -206,20 +257,26 @@ class ContextCoalescer(BaseQueryStep):
             total_tokens_estimate=token_estimate,
         )
 
-    def process(self, graph_context_and_query: tuple) -> SystemPrompt:
+    def process(self, context_data: tuple) -> SystemPrompt:
         """
-        Main processing method to coalesce GraphContext into a system prompt.
+        Main processing method to coalesce GraphContext and search results into a system prompt.
 
         Args:
-            graph_context_and_query: Tuple of (graph_context, user_query)
+            context_data: Tuple of (graph_context, user_query, search_results)
 
         Returns:
             SystemPrompt ready for LLM consumption
         """
-        graph_context, user_query = graph_context_and_query
+        if len(context_data) == 3:
+            graph_context, user_query, search_results = context_data
+        else:
+            # Backward compatibility
+            graph_context, user_query = context_data
+            search_results = None
+
         self.logger.info("Starting context coalescence")
 
-        system_prompt = self.build_system_prompt(graph_context, user_query)
+        system_prompt = self.build_system_prompt(graph_context, user_query, search_results)
 
         self.logger.info(
             f"Context coalescence complete. "
