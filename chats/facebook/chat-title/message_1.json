@@ -1,0 +1,31 @@
+{
+  "participants": [
+    {
+      "name": "HengHong Lee"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "HengHong Lee",
+      "timestamp_ms": 1752501007051,
+      "content": "and its super good at debugging",
+      "is_geoblocked_for_viewer": false,
+      "is_unsent_image_by_messenger_kid_parent": false
+    },
+    {
+      "Comment": "More messages here"
+    }
+  ],
+  "title": "Chat title",
+  "is_still_participant": true,
+  "thread_path": "inbox/chat_title",
+  "magic_words": [],
+  "image": {
+    "uri": "image_url",
+    "creation_timestamp": 1703379389
+  },
+  "joinable_mode": {
+    "mode": 1,
+    "link": ""
+  }
+}

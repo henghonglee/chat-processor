@@ -1,6 +1,5 @@
 # Ignore data folders
 vector_store/
-chats/
 chats-parsed/
 chats-parsed-chunked/
 chats-processed/

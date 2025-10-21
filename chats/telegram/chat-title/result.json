@@ -1,0 +1,35 @@
+{
+  "name": "chat-title",
+  "type": "private_group",
+  "id": "chat_id",
+  "messages": [
+    {
+      "id": "message_id",
+      "type": "service",
+      "date": "2025-05-06T18:58:54",
+      "date_unixtime": "1746529134",
+      "actor": "henghonglee",
+      "actor_id": "user687804705",
+      "action": "create_group",
+      "title": "chat-title",
+      "members": ["henghonglee"],
+      "text": "",
+      "text_entities": []
+    },
+    {
+      "id": "message_id2",
+      "type": "message",
+      "date": "2025-05-06T18:59:18",
+      "date_unixtime": "1746529158",
+      "from": "henghonglee",
+      "from_id": "user687804705",
+      "text": "haha created a group to follow up on the discussions before",
+      "text_entities": [
+        {
+          "type": "plain",
+          "text": "haha created a group to follow up on the discussions before"
+        }
+      ]
+    }
+  ]
+}

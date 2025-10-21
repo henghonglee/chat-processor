@@ -62,8 +62,6 @@ nano .env  # or your preferred editor
 # groq/qwen2.5-72b-instruct is the default model, pass model with --model
 python3 ingestion/pipeline.py whatsapp--group
 
-# Process all available chats
-python3 ingest_all_cypher.py
 ```
 
 ### 5. Query Your Data
