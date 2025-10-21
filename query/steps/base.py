@@ -96,4 +96,4 @@ class BaseQueryStep(ABC):
         Cleanup method called when the step is no longer needed.
         Override this method to perform step-specific cleanup.
         """
-        # Default implementation - no cleanup required
+        self.logger.info(f"Closing {self.__class__.__name__}")

@@ -7,8 +7,8 @@ to chat completions, and formatting/printing the final results.
 
 import importlib.util
 import json
-import os
 import logging
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -91,7 +91,7 @@ class ResultOutputter(BaseQueryStep):
         """Setup OpenAI client and configuration."""
         self.openai_client = openai.OpenAI(
             base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY")
+            api_key=os.getenv("OPENROUTER_API_KEY"),
         )
 
         # Configuration
@@ -582,7 +582,7 @@ if __name__ == "__main__":
         outputter = ResultOutputter(api_key)
 
         # Test query
-        user_query = "What did Shaun say about BTC?"
+        user_query = "What did HengHong Lee say about BTC?"
         processing_time = 1.5
 
         # Process and output
