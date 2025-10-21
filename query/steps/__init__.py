@@ -3,10 +3,11 @@ Query processing pipeline for chat text processor.
 
 This package provides a multi-step pipeline for processing user queries:
 1. Hybrid search - find relevant entities and claims using semantic similarity and full-text search
-2. Cypher generation - generate Neo4j Cypher queries for specific entity/claim IDs
-3. Query expansion - expand queries to get all neighbors
-4. Context coalescence - combine all information into system prompt
-5. Result output - format and print final results
+2. Reranker - rerank search results using semantic similarity models
+3. Cypher generation - generate Neo4j Cypher queries for specific entity/claim IDs
+4. Query expansion - expand queries to get all neighbors
+5. Context coalescence - combine all information into system prompt
+6. Result output - format and print final results
 
 The hybrid search step performs both semantic search against ChromaDB and
 full-text search to find relevant entity and claim IDs that match the user query.
@@ -33,10 +34,11 @@ def _import_query_step(step_number: int, class_name: str):
     """Dynamically import a query step module and return the specified class."""
     step_files = {
         1: "a_hybrid_search.py",
-        2: "b_cypher_generation.py",
-        3: "c_query_expansion.py",
-        4: "d_context_coalescence.py",
-        5: "e_result_output.py",
+        2: "b_reranker.py",
+        3: "c_cypher_generation.py",
+        4: "d_query_expansion.py",
+        5: "e_context_coalescence.py",
+        6: "f_result_output.py",
     }
 
     step_file = step_files[step_number]
@@ -70,14 +72,16 @@ def _import_query_step(step_number: int, class_name: str):
 
 # Import query step classes
 HybridSearcher = _import_query_step(1, "HybridSearcher")
-CypherGenerator = _import_query_step(2, "CypherGenerator")
-QueryExpander = _import_query_step(3, "QueryExpander")
-ContextCoalescer = _import_query_step(4, "ContextCoalescer")
-ResultOutputter = _import_query_step(5, "ResultOutputter")
+RerankerStep = _import_query_step(2, "RerankerStep")
+CypherGenerator = _import_query_step(3, "CypherGenerator")
+QueryExpander = _import_query_step(4, "QueryExpander")
+ContextCoalescer = _import_query_step(5, "ContextCoalescer")
+ResultOutputter = _import_query_step(6, "ResultOutputter")
 
 __all__ = [
     # Main pipeline components
     "HybridSearcher",
+    "RerankerStep",
     "CypherGenerator",
     "QueryExpander",
     "ContextCoalescer",

@@ -19,7 +19,7 @@ def _import_cypher_module():
     from pathlib import Path
 
     current_dir = Path(__file__).parent
-    step_path = current_dir / "b_cypher_generation.py"
+    step_path = current_dir / "c_cypher_generation.py"
 
     project_root = str(current_dir.parent.parent)
     if project_root not in sys.path:

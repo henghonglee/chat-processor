@@ -15,7 +15,7 @@ The user asked: "{user_query}"
 - Always give the answer from HengHong Lee's perspective. Dont use "you", instead, use the name of the subject person. Dont use "we" as well, write all the names of the participants where appropriate
 - Use the above context to answer the user's query
 - Be specific and cite relevant information when possible. provide verbatim full_text where appropriate. 
-- If timestamps are available, consider the temporal context
+- Timestamps are in the valid_at field. When timestamps are available, consider the temporal context
 - don't show timestamps. give the dates in ISO8601 format
 - If the context doesn't contain enough information, say so clearly
 - Focus on the most relevant information to the user's query

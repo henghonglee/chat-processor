@@ -21,18 +21,22 @@ class FullTextSearcher(BaseSearcher):
         self.chroma_client = self.config.get('chroma_client')
         if not self.chroma_client:
             raise ValueError("chroma_client is required in config")
-        
+
+        # Initialize documents to empty dict to prevent AttributeError
+        self.documents = {}
+
         try:
             self.full_text_collection = self.chroma_client.get_collection(name="full_text")
             self.entity_collection = self.chroma_client.get_collection(name="entity")
-            
+
             # Get all documents for indexing
             self._build_search_index()
-            
+
         except Exception as e:
             logging.warning(f"Failed to setup full-text search: {e}")
             self.full_text_collection = None
             self.entity_collection = None
+            # Keep documents as empty dict
     
     def _build_search_index(self):
         """Build in-memory search index for fast text search."""
@@ -92,7 +96,7 @@ class FullTextSearcher(BaseSearcher):
     
     def search(self, query: str, top_k: int = 20) -> List[SearchResult]:
         """Perform BM25-based full-text search."""
-        if not self.documents:
+        if not hasattr(self, 'documents') or not self.documents:
             return []
         
         query_terms = self._tokenize(query)

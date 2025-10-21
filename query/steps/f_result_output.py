@@ -23,7 +23,7 @@ from .base import BaseQueryStep
 def _import_context_coalescence_module():
     """Import the context coalescence module dynamically."""
     current_dir = Path(__file__).parent
-    step_path = current_dir / "d_context_coalescence.py"
+    step_path = current_dir / "e_context_coalescence.py"
 
     project_root = str(current_dir.parent.parent)
     if project_root not in sys.path:
