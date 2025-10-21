@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -698,3 +699,78 @@ def ingest_processed_cypher(chat_name: str) -> bool:
     Now calls the combined process_cypher_chunks function with ingest_only=True.
     """
     return process_cypher_chunks(chat_name, ingest_only=True)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Post-process and ingest Cypher queries into Neo4j"
+    )
+    parser.add_argument(
+        "chat_name",
+        nargs="?",
+        help="Chat name to process (e.g., telegram-mcp, facebook-soldegen)",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available chats"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be processed without executing"
+    )
+    parser.add_argument(
+        "--post-process-only",
+        action="store_true",
+        help="Run only post-processing step (no Neo4j ingestion)"
+    )
+    parser.add_argument(
+        "--ingest-only",
+        action="store_true",
+        help="Run only ingestion step (requires post-processed files)"
+    )
+    parser.add_argument(
+        "--start-chunk",
+        type=int,
+        help="Start processing from chunk number N"
+    )
+    parser.add_argument(
+        "--end-chunk",
+        type=int,
+        help="Stop processing at chunk number N"
+    )
+
+    args = parser.parse_args()
+
+    # List available chats
+    if args.list:
+        chats = get_available_chats()
+        if chats:
+            print("📁 Available chats:")
+            for chat in chats:
+                print(f"  - {chat}")
+        else:
+            print("❌ No chats found in cypher-queries/ directory")
+        sys.exit(0)
+
+    # Validate chat_name is provided
+    if not args.chat_name:
+        print("❌ Error: chat_name is required")
+        print("Usage: python3 steps/g_ingestion.py CHAT_NAME [OPTIONS]")
+        print("\nRun with --list to see available chats")
+        sys.exit(1)
+
+    # Run processing
+    success = process_cypher_chunks(
+        args.chat_name,
+        dry_run=args.dry_run,
+        post_process_only=args.post_process_only,
+        ingest_only=args.ingest_only,
+        start_chunk=args.start_chunk,
+        end_chunk=args.end_chunk
+    )
+
+    sys.exit(0 if success else 1)

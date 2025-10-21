@@ -44,13 +44,15 @@ def _import_query_step(step_number, class_name: str):
     if step_number == 1:
         step_file = "a_hybrid_search.py"
     elif step_number == 2:
-        step_file = "b_cypher_generation.py"
+        step_file = "b_reranker.py"
     elif step_number == 3:
-        step_file = "c_query_expansion.py"
+        step_file = "c_cypher_generation.py"
     elif step_number == 4:
-        step_file = "d_context_coalescence.py"
+        step_file = "d_query_expansion.py"
     elif step_number == 5:
-        step_file = "e_result_output.py"
+        step_file = "e_context_coalescence.py"
+    elif step_number == 6:
+        step_file = "f_result_output.py"
     else:
         raise ValueError(f"Unknown step number: {step_number}")
 
@@ -81,19 +83,20 @@ def _import_query_step(step_number, class_name: str):
             sys.path.remove(project_root)
 
 
-# Import query step classes - using HybridSearcher
+# Import query step classes
 SearcherClass = _import_query_step(1, "HybridSearcher")
-CypherGenerator = _import_query_step(2, "CypherGenerator")
-QueryExpander = _import_query_step(3, "QueryExpander")
-ContextCoalescer = _import_query_step(4, "ContextCoalescer")
-ResultOutputter = _import_query_step(5, "ResultOutputter")
+RerankerStep = _import_query_step(2, "RerankerStep")
+CypherGenerator = _import_query_step(3, "CypherGenerator")
+QueryExpander = _import_query_step(4, "QueryExpander")
+ContextCoalescer = _import_query_step(5, "ContextCoalescer")
+ResultOutputter = _import_query_step(6, "ResultOutputter")
 
 
 # Import GraphContext from the query expansion step
 def _import_graph_context():
     """Import GraphContext from step 3."""
     current_dir = Path(__file__).parent
-    step_path = current_dir / "steps" / "c_query_expansion.py"
+    step_path = current_dir / "steps" / "d_query_expansion.py"
     project_root = str(current_dir.parent)
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
@@ -134,6 +137,13 @@ class PipelineConfig:
     enable_fulltext_search: bool = True
     enable_vector_search: bool = True
     enable_graph_search: bool = True
+
+    # Reranker options
+    enable_reranking: bool = True
+    rerank_method: str = "cross-encoder"
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_top_k_before: int = 50
+    rerank_top_k_after: int = 20
 
     # LLM options
     model: str = "gpt-4o-mini"
@@ -200,11 +210,23 @@ class QueryPipeline:
         }
         self.searcher = SearcherClass(searcher_config)
 
-        # Step 2: Cypher Generator
+        # Step 2: Reranker (optional)
+        self.reranker = None
+        if self.config.enable_reranking:
+            reranker_config = {
+                "rerank_method": self.config.rerank_method,
+                "rerank_model": self.config.rerank_model,
+                "rerank_top_k_before": self.config.rerank_top_k_before,
+                "rerank_top_k_after": self.config.rerank_top_k_after,
+            }
+            self.reranker = RerankerStep(reranker_config)
+            logger.info("Reranker initialized")
+
+        # Step 3: Cypher Generator
         self.cypher_generator = CypherGenerator()
 
-        # Step 3: Query Expander (Neo4j)
-        QueryExpander = _import_query_step(3, "QueryExpander")
+        # Step 4: Query Expander (Neo4j)
+        QueryExpander = _import_query_step(4, "QueryExpander")
         self.query_expander = QueryExpander()
 
         # Initialize Neo4j driver if available
@@ -232,7 +254,7 @@ class QueryPipeline:
             logger.error("Neo4j configuration incomplete - cannot proceed without Neo4j")
             raise RuntimeError("Neo4j configuration is required for pipeline operation")
 
-        # Step 4: Context Coalescer
+        # Step 5: Context Coalescer
         self.context_coalescer = ContextCoalescer(
             config={
                 "max_entities": self.config.max_entities,
@@ -243,7 +265,7 @@ class QueryPipeline:
             }
         )
 
-        # Step 5: Result Outputter
+        # Step 6: Result Outputter
         self.result_outputter = ResultOutputter(
             openai_api_key=self.config.openai_api_key,
             config={
@@ -289,23 +311,28 @@ class QueryPipeline:
             logger.info("Step 1: Performing hybrid search")
             search_results = self.searcher.execute(processed_query)
 
-            # Step 2: Generate Cypher Queries
-            logger.info("Step 2: Generating Cypher queries")
+            # Step 2: Rerank Search Results (optional)
+            if self.reranker:
+                logger.info("Step 2: Reranking search results")
+                search_results = self.reranker.execute(search_results)
+
+            # Step 3: Generate Cypher Queries
+            logger.info("Step 3: Generating Cypher queries")
             query_set = self.cypher_generator.execute(search_results)
 
-            # Step 3: Execute Cypher Queries and Build Graph Context
-            logger.info("Step 3: Executing query expansion")
+            # Step 4: Execute Cypher Queries and Build Graph Context
+            logger.info("Step 4: Executing query expansion")
             graph_context = self.query_expander.execute(query_set)
 
-            # Step 4: Coalesce Context into System Prompt
-            logger.info("Step 4: Coalescing context into system prompt")
+            # Step 5: Coalesce Context into System Prompt
+            logger.info("Step 5: Coalescing context into system prompt")
             system_prompt = self.context_coalescer.execute((graph_context, processed_query))
 
             # Calculate preprocessing time
             preprocessing_time = time.time() - pipeline_start_time
 
-            # Step 5: Send to LLM and Output Results
-            logger.info("Step 5: Generating and outputting final result")
+            # Step 6: Send to LLM and Output Results
+            logger.info("Step 6: Generating and outputting final result")
             query_result = self.result_outputter.execute(
                 (
                     system_prompt,

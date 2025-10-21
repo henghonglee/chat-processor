@@ -1,3 +1,5 @@
+.DS_Store
+
 # Ignore data folders
 vector_store/
 chats-parsed/

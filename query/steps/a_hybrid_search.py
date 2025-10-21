@@ -200,11 +200,6 @@ class HybridSearcher(BaseQueryStep):
                                 extraction_class="PROJECT",
                                 extraction_text="Azure",
                             ),
-                            langextract.data.Extraction(
-                                extraction_class="TOPIC",
-                                extraction_text="climbing",
-                            ),
-
                         ],
                     ),
                     langextract.data.ExampleData(

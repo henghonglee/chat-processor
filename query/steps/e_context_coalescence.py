@@ -19,7 +19,7 @@ from .base import BaseQueryStep
 def _import_cypher_generation_module():
     """Import the cypher generation module dynamically."""
     current_dir = Path(__file__).parent
-    step_path = current_dir / "b_cypher_generation.py"
+    step_path = current_dir / "c_cypher_generation.py"
 
     project_root = str(current_dir.parent.parent)
     if project_root not in sys.path:
@@ -39,7 +39,7 @@ def _import_cypher_generation_module():
 def _import_expansion_module():
     """Import the expansion module to get GraphContext."""
     current_dir = Path(__file__).parent
-    step_path = current_dir / "c_query_expansion.py"
+    step_path = current_dir / "d_query_expansion.py"
 
     project_root = str(current_dir.parent.parent)
     if project_root not in sys.path:

@@ -71,35 +71,43 @@ class CypherGenerator(BaseQueryStep):
             "entity_by_id": """
                 MATCH (e:Entity)
                 WHERE e.id CONTAINS $entity_id
-                MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
-                MATCH mention = (c)-[:MENTION]->(e)
+                MATCH path = (p:Person)-[r:SAID|REACTED]-(c)
+                MATCH mention = (c)-[:MENTION]-(e)
                 RETURN c, path, mention, e
                 ORDER BY c.valid_at DESC
                 """,
             "claim_by_id": """
                 MATCH (c:Claim)
                 WHERE c.id CONTAINS $claim_id
-                MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
-                OPTIONAL MATCH mention = (c)-[:MENTION]->(e:Entity)
+                MATCH path = (p:Person)-[r:SAID|REACTED]-(c)
+                OPTIONAL MATCH mention = (c)-[:MENTION]-(e:Entity)
                 RETURN c, path, mention, e
                 ORDER BY c.valid_at DESC
                 """,
             "full_text_by_id": """
                 MATCH (c:Claim)
                 WHERE c.id CONTAINS $claim_id
-                MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
-                OPTIONAL MATCH mention = (c)-[:MENTION]->(e:Entity)
+                MATCH path = (p:Person)-[r:SAID|REACTED]-(c)
+                OPTIONAL MATCH mention = (c)-[:MENTION]-(e:Entity)
                 RETURN c, path, mention, e
                 ORDER BY c.valid_at DESC
             """,
             "person_by_short_name_and_search_text": """
                 MATCH (p:Person)
                 WHERE p.id CONTAINS $person_id
-                MATCH path = (p)-[r:SAID|REACTED]->(c:Claim)
-                WHERE ANY(txt IN r.full_text WHERE ANY(search_term IN $search_text WHERE txt CONTAINS search_term))
-                OR ANY(search_term IN $search_text WHERE c.summary_text CONTAINS search_term)
-                MATCH mention = (c)-[:MENTION]->(e)
+                MATCH path = (p)-[r:SAID|REACTED]-(c:Claim)
+                WHERE ANY(txt IN r.full_text WHERE ANY(search_term IN $search_text WHERE toLower(txt) CONTAINS toLower(search_term)))
+                OR ANY(search_term IN $search_text WHERE toLower(c.summary_text) CONTAINS toLower(search_term))
+                OPTIONAL MATCH mention = (c)-[:MENTION]-(e)
                 RETURN c, path, mention, e
+                ORDER BY c.valid_at DESC
+                """,
+            "claims_containing_search_terms": """
+                MATCH (c:Claim)
+                WHERE ANY(search_term IN $search_text WHERE toLower(c.summary_text) CONTAINS toLower(search_term))
+                MATCH path = (p:Person)-[r:SAID|REACTED]-(c)
+                MATCH mention = (c)-[:MENTION]-(e)
+                RETURN c, path, mention, e, p
                 ORDER BY c.valid_at DESC
                 """,
         }
@@ -203,6 +211,8 @@ class CypherGenerator(BaseQueryStep):
     ) -> List[CypherQuery]:
         """Generate person search queries using vector search results."""
         queries = []
+
+        # Generate person-specific queries for found people
         for person_id in vector_search_results.person_ids:
             query = CypherQuery(
                 query=self.templates["person_by_short_name_and_search_text"].strip(),
@@ -212,8 +222,18 @@ class CypherGenerator(BaseQueryStep):
             )
             queries.append(query)
 
+        # Also add a general query to find claims containing the search terms
+        if vector_search_results.extracted_entities:
+            query = CypherQuery(
+                query=self.templates["claims_containing_search_terms"].strip(),
+                parameters={"search_text": vector_search_results.extracted_entities},
+                query_type="claims_containing_search_terms",
+                description="Find claims containing search terms",
+            )
+            queries.append(query)
+
         self.logger.info(
-            f"Generated {len(queries)} person ID queries from vector search"
+            f"Generated {len(queries)} person and claim queries from vector search"
         )
 
         return queries
