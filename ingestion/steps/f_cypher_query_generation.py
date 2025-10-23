@@ -64,16 +64,38 @@ def load_jsonl(path: Path) -> Iterable[dict]:
                 yield json.loads(line)
 
 
-def load_system_prompt() -> str:
-    """Load the system prompt for Cypher generation."""
+def load_system_prompt(version: str = "v2") -> str:
+    """
+    Load the system prompt for Cypher generation.
+
+    Args:
+        version: Prompt version to use ('v1' or 'v2', default 'v2')
+
+    Returns:
+        System prompt as JSON string
+    """
     prompts_dir = Path(__file__).parent.parent / "prompts"
-    cypher_prompt_path = prompts_dir / "cypher_prompt.json"
+
+    # Try v2 first (recommended), fallback to v1, then original
+    if version == "v2":
+        cypher_prompt_path = prompts_dir / "cypher_prompt_v2.json"
+        fallback_path = prompts_dir / "cypher_prompt.json"
+    else:
+        cypher_prompt_path = prompts_dir / "cypher_prompt.json"
+        fallback_path = None
 
     try:
         with open(cypher_prompt_path, "r", encoding="utf-8") as f:
-            return f.read()
+            prompt_content = f.read()
+            print(f"📝 Loaded prompt from: {cypher_prompt_path.name}")
+            return prompt_content
 
     except FileNotFoundError:
+        if fallback_path and fallback_path.exists():
+            print(f"⚠️ {cypher_prompt_path.name} not found, using fallback: {fallback_path.name}")
+            with open(fallback_path, "r", encoding="utf-8") as f:
+                return f.read()
+
         print(f"⚠️ System prompt file not found: {cypher_prompt_path}")
         return "You are a Neo4j Cypher expert. Generate Cypher queries from the provided chat data."
 
@@ -190,7 +212,9 @@ def generate_cypher_for_chat(chat_name: str, model: str) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load system prompt
-    system_prompt = load_system_prompt()
+    import os
+    prompt_version = os.environ.get("CYPHER_PROMPT_VERSION", "v2")
+    system_prompt = load_system_prompt(version=prompt_version)
     print(f"📝 Loaded system prompt ({len(system_prompt)} characters)")
 
     # Create AI strategy
@@ -273,8 +297,18 @@ if __name__ == "__main__":
         default="groq/qwen2.5-72b-instruct",
         help="AI model for Cypher generation (default: groq/qwen2.5-72b-instruct)",
     )
+    parser.add_argument(
+        "--prompt-version",
+        default="v2",
+        choices=["v1", "v2"],
+        help="Cypher prompt version to use (default: v2 - recommended)",
+    )
 
     args = parser.parse_args()
+
+    # Set the prompt version globally
+    import os
+    os.environ["CYPHER_PROMPT_VERSION"] = args.prompt_version
 
     try:
         cypher_results = generate_cypher_for_chat(args.chat_name, args.model)

@@ -39,6 +39,12 @@ class ChainOfResponsibilityProcessor:
         )
         self.logger = logging.getLogger(__name__)
 
+        # Suppress trafilatura warnings that generate "WARNING: discarding data: None"
+        logging.getLogger('trafilatura').setLevel(logging.ERROR)
+        logging.getLogger('trafilatura.core').setLevel(logging.ERROR)
+        logging.getLogger('trafilatura.utils').setLevel(logging.ERROR)
+        logging.getLogger('trafilatura.htmlprocessing').setLevel(logging.ERROR)
+
         # Setup default processor chain if not provided
         if processor_chain is None:
             self.processor_chain = self._create_default_chain()

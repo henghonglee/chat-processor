@@ -397,7 +397,7 @@ def execute_cypher_statements(
     if not statements:
         return 0, 0
 
-    uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    uri = os.getenv("NEO4J_URI")
     user = os.getenv("NEO4J_USER", "neo4j")
     password = os.getenv("NEO4J_PASSWORD", "password")
 

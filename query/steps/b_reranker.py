@@ -175,6 +175,19 @@ class RerankerStep(BaseQueryStep):
             self.logger.warning("No results to rerank")
             return input_data
 
+        # Log BEFORE reranking
+        self.logger.info("=" * 80)
+        self.logger.info("BEFORE RERANKING:")
+        self.logger.info("=" * 80)
+        for i, result in enumerate(results_to_rerank[:10], 1):
+            self.logger.info(
+                f"  {i}. [{result.node_type}] {result.node_id[:50]} "
+                f"(score: {result.similarity_score:.4f}, method: {result.search_method})"
+            )
+            self.logger.info(f"     Text: {result.document_text[:100]}...")
+        if len(results_to_rerank) > 10:
+            self.logger.info(f"  ... and {len(results_to_rerank) - 10} more results")
+
         # 2. Rerank using selected method
         reranked = self.reranker.rerank(
             input_data.original_query,
@@ -195,6 +208,20 @@ class RerankerStep(BaseQueryStep):
 
         # 5. Limit to top_k_after
         reranked = reranked[:self.rerank_config.top_k_after]
+
+        # Log AFTER reranking
+        self.logger.info("=" * 80)
+        self.logger.info("AFTER RERANKING:")
+        self.logger.info("=" * 80)
+        for i, (result, score) in enumerate(reranked[:10], 1):
+            self.logger.info(
+                f"  {i}. [{result.node_type}] {result.node_id[:50]} "
+                f"(score: {score:.4f}, method: {result.search_method})"
+            )
+            self.logger.info(f"     Text: {result.document_text[:100]}...")
+        if len(reranked) > 10:
+            self.logger.info(f"  ... and {len(reranked) - 10} more results")
+        self.logger.info("=" * 80)
 
         self.logger.info(f"After reranking and filtering: {len(reranked)} results")
 

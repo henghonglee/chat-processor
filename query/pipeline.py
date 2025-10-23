@@ -316,17 +316,31 @@ class QueryPipeline:
                 logger.info("Step 2: Reranking search results")
                 search_results = self.reranker.execute(search_results)
 
-            # Step 3: Generate Cypher Queries
-            logger.info("Step 3: Generating Cypher queries")
-            query_set = self.cypher_generator.execute(search_results)
+            # Step 3-4: Generate and Execute Cypher Queries (only when graph search is enabled)
+            if self.config.enable_graph_search:
+                logger.info("Step 3: Generating Cypher queries")
+                query_set = self.cypher_generator.execute(search_results)
 
-            # Step 4: Execute Cypher Queries and Build Graph Context
-            logger.info("Step 4: Executing query expansion")
-            graph_context = self.query_expander.execute(query_set)
+                logger.info("Step 4: Executing query expansion")
+                graph_context = self.query_expander.execute(query_set)
+            else:
+                logger.info("Steps 3-4: Cypher queries and expansion skipped (graph search disabled)")
+                # Import GraphContext for empty context
+                from .steps.d_query_expansion import GraphContext
+                graph_context = GraphContext(
+                    entities={},
+                    people={},
+                    claims={},
+                    said_relationships=[],
+                    mention_relationships=[],
+                    reaction_relationships=[],
+                    paths=[],
+                    metadata={"skipped_reason": "graph_search_disabled"}
+                )
 
             # Step 5: Coalesce Context into System Prompt
             logger.info("Step 5: Coalescing context into system prompt")
-            system_prompt = self.context_coalescer.execute((graph_context, processed_query))
+            system_prompt = self.context_coalescer.execute((graph_context, processed_query, search_results))
 
             # Calculate preprocessing time
             preprocessing_time = time.time() - pipeline_start_time

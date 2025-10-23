@@ -1,0 +1,483 @@
+{
+  "version": "2.0.0",
+  "title": "Enriched Chat to Cypher Processor v2.0",
+  "role": "precise data engineer",
+  "directive": [
+    "Given a chat chunk, output ONLY Cypher that:",
+    "(1) Creates consolidated, verbose claims from assertions and opinions",
+    "(2) MERGEs all people and entities using extracted_entities",
+    "(3) Links speakers via :SAID, reactors via :REACTED",
+    "(4) Creates :MENTION relationships from claims to referenced entities/people",
+    "(5) Is deterministic - same input produces identical output every time",
+    "(6) Follows strict formatting rules to ensure syntactically valid Cypher",
+    "Output Cypher only, no commentary."
+  ],
+
+  "output_constraints": {
+    "format": "cypher",
+    "no_commentary": true,
+    "no_raw_messages": true,
+    "no_semicolons": true,
+    "no_explanations": true,
+    "skip_empty_chunks": "Return empty string if chunk has no extractable claims"
+  },
+
+  "allowed": {
+    "node_labels": ["Person", "Claim", "Entity"],
+    "relationship_types": ["SAID", "REACTED", "MENTION"]
+  },
+
+  "CRITICAL_FORMATTING_RULES": {
+    "ARRAY_BRACKET_MATCHING": {
+      "RULE": "EVERY OPENING [ MUST HAVE A CLOSING ]",
+      "SEVERITY": "CRITICAL - This is the #2 cause of syntax errors",
+      "CORRECT_PATTERN": "verbatim_texts: [\"text1\", \"text2\"]",
+      "WRONG_PATTERNS": [
+        "verbatim_texts: [\"text1\", \"text2\"",
+        "verbatim_texts: [\"text1\"}",
+        "verbatim_texts: \"text1\", \"text2\"]"
+      ],
+      "EXAMPLES": {
+        "single_item": "verbatim_texts: [\"single message\"]",
+        "multiple_items": "verbatim_texts: [\"first\", \"second\", \"third\"]",
+        "empty_array_forbidden": "verbatim_texts: [] // NEVER use empty arrays"
+      },
+      "VALIDATION": "Count opening [ and closing ] - MUST be equal. Use a validator before outputting."
+    },
+    "ON_CREATE_SET_PATTERN": {
+      "RULE": "NEVER WRITE 'ON CREATE SET' WITHOUT PROPERTIES IMMEDIATELY FOLLOWING",
+      "SEVERITY": "CRITICAL - This is the #1 cause of syntax errors",
+      "CORRECT_PATTERN": "MERGE (variable:Label {id: \"id\"})\n  ON CREATE SET\n    variable.property1 = value1,\n    variable.property2 = value2",
+      "WRONG_PATTERNS": [
+        "MERGE (c:Claim {id: \"...\"}) ON CREATE SET",
+        "MERGE (c:Claim {id: \"...\"}) ON CREATE SET\nMERGE (...)",
+        "MERGE (c:Claim {id: \"...\"}) ON CREATE SET // comment"
+      ],
+      "ALTERNATIVE_SAFE_PATTERN": "MERGE (variable:Label {id: \"id\", property1: value1, property2: value2})",
+      "VALIDATION": "Before outputting, verify every 'ON CREATE SET' has properties on the next line(s)"
+    },
+    "REQUIRED_NODE_PROPERTIES": {
+      "Claim": {
+        "MUST_SET": ["text", "created_at"],
+        "EXAMPLE": "MERGE (c_btc:Claim {id: \"claim-btc-bullish\"})\n  ON CREATE SET\n    c_btc.text = \"Bitcoin will reach new all-time highs in 2024\",\n    c_btc.created_at = 1704067200"
+      },
+      "Person": {
+        "MUST_SET": ["name"],
+        "EXAMPLE": "MERGE (p_alice:Person {id: \"person-alice-smith\"})\n  ON CREATE SET p_alice.name = \"Alice Smith\""
+      },
+      "Entity": {
+        "MUST_SET": ["name", "type"],
+        "EXAMPLE": "MERGE (e_asset_btc:Entity {id: \"entity-asset-btc\"})\n  ON CREATE SET\n    e_asset_btc.name = \"BTC\",\n    e_asset_btc.type = \"asset\""
+      }
+    }
+  },
+
+  "graph_schema": {
+    "nodes": {
+      "Person": {
+        "required": {
+          "id": {
+            "type": "string",
+            "format": "person-<name-slug>",
+            "example": "person-henghong-lee"
+          },
+          "name": {
+            "type": "string",
+            "format": "Human readable name with proper capitalization",
+            "example": "Henghong Lee"
+          }
+        },
+        "optional": {}
+      },
+      "Claim": {
+        "required": {
+          "id": {
+            "type": "string",
+            "format": "claim-<descriptive-slug>",
+            "example": "claim-btc-bullish-2024"
+          },
+          "text": {
+            "type": "string",
+            "description": "Consolidated, verbose claim text that stands alone",
+            "example": "Bitcoin will reach new all-time highs in 2024 due to halving and institutional adoption"
+          },
+          "created_at": {
+            "type": "integer",
+            "description": "Unix timestamp (seconds since epoch)",
+            "example": 1704067200
+          }
+        },
+        "optional": {
+          "url": {
+            "type": "string",
+            "description": "Source URL if claim references external link"
+          },
+          "source_chunk_id": {
+            "type": "string",
+            "description": "Chunk ID for traceability"
+          }
+        }
+      },
+      "Entity": {
+        "required": {
+          "id": {
+            "type": "string",
+            "format": "entity-<type>-<name-slug>",
+            "example": "entity-asset-btc"
+          },
+          "name": {
+            "type": "string",
+            "format": "Preserve exact capitalization from entity extraction",
+            "example": "BTC"
+          },
+          "type": {
+            "type": "string",
+            "format": "lower_snake_case, singular",
+            "example": "asset"
+          }
+        },
+        "optional": {
+          "description": {
+            "type": "string",
+            "example": "Bitcoin cryptocurrency"
+          }
+        }
+      }
+    },
+    "relationships": {
+      "SAID": {
+        "description": "Links speaker (Person) to claim they originated",
+        "direction": "(Person)-[:SAID]->(Claim)",
+        "cardinality": "exactly ONE per person per claim",
+        "required_properties": {
+          "created_at": {
+            "type": "integer",
+            "description": "Unix timestamp of first statement"
+          },
+          "verbatim_texts": {
+            "type": "array[string]",
+            "description": "All original messages from speaker about this claim, chronologically ordered",
+            "example": ["I think BTC is going to moon", "We're definitely hitting ATH this year"]
+          }
+        }
+      },
+      "REACTED": {
+        "description": "Links person who reacted to a claim (not the originator)",
+        "direction": "(Person)-[:REACTED]->(Claim)",
+        "cardinality": "at most ONE per person per claim",
+        "required_properties": {
+          "created_at": {
+            "type": "integer",
+            "description": "Unix timestamp of first reaction"
+          },
+          "verbatim_texts": {
+            "type": "array[string]",
+            "description": "All reaction messages from this person, chronologically ordered",
+            "example": ["Agreed!", "Very bullish on this"]
+          }
+        }
+      },
+      "MENTION": {
+        "description": "Links claim to entities/people referenced in claim text",
+        "direction": "(Claim)-[:MENTION]->(Person|Entity)",
+        "cardinality": "zero or more per claim",
+        "required_properties": {},
+        "IMPORTANT": "ONLY from Claim TO (Person or Entity), NEVER the reverse"
+      }
+    }
+  },
+
+  "validation": {
+    "forbidden_patterns": {
+      "claim_speaks_to_person": {
+        "pattern": "(c:Claim)-[:SAID]->(p:Person)",
+        "reason": "Claims don't speak; people speak claims",
+        "correct": "(p:Person)-[:SAID]->(c:Claim)"
+      },
+      "person_mentions_claim": {
+        "pattern": "(p:Person)-[:MENTION]->(c:Claim)",
+        "reason": "MENTION is only from claims to referenced entities/people",
+        "correct": "(c:Claim)-[:MENTION]->(p:Person)"
+      },
+      "person_mentions_entity": {
+        "pattern": "(p:Person)-[:MENTION]->(e:Entity)",
+        "reason": "People don't MENTION entities; claims MENTION entities",
+        "correct": "(c:Claim)-[:MENTION]->(e:Entity)"
+      },
+      "person_mentions_person": {
+        "pattern": "(p1:Person)-[:MENTION]->(p2:Person)",
+        "reason": "Direct person-to-person mentions not modeled",
+        "correct": "(p1:Person)-[:SAID]->(c:Claim)-[:MENTION]->(p2:Person)"
+      }
+    },
+    "required_patterns": {
+      "every_claim_has_speaker": {
+        "pattern": "(p:Person)-[:SAID]->(c:Claim)",
+        "rule": "Every Claim node MUST have exactly one incoming :SAID relationship"
+      },
+      "said_has_properties": {
+        "pattern": "(p:Person)-[:SAID {created_at: <int>, verbatim_texts: <array>}]->(c:Claim)",
+        "rule": "Every :SAID MUST have created_at and verbatim_texts (non-empty array)"
+      },
+      "reacted_has_properties": {
+        "pattern": "(p:Person)-[:REACTED {created_at: <int>, verbatim_texts: <array>}]->(c:Claim)",
+        "rule": "Every :REACTED MUST have created_at and verbatim_texts (non-empty array)"
+      }
+    },
+    "self_validation_checklist": [
+      "COUNT BRACKETS: Count all [ and all ] - MUST be equal",
+      "COUNT BRACES: Count all { and all } - MUST be equal",
+      "All variables use snake_case (no hyphens like claim-btc)",
+      "Every array ends with ] - check verbatim_texts arrays",
+      "Every property map ends with } - check relationship properties",
+      "Every Claim has exactly one :SAID relationship",
+      "All :SAID and :REACTED have created_at and verbatim_texts",
+      "All verbatim_texts are non-empty arrays (at least 1 element)",
+      "All :MENTION relationships go from Claim to Entity/Person (NEVER Person to anything)",
+      "No semicolons in output",
+      "Every 'ON CREATE SET' has properties following it (NEVER empty)",
+      "Proper section grouping with double newlines"
+    ]
+  },
+
+  "ids": {
+    "rules": {
+      "id_style": "kebab-case",
+      "global_uniqueness_across_all_labels": true,
+      "variables_use_snake_case": true,
+      "no_hyphens_in_variable_names": true
+    },
+    "slugify": {
+      "lowercase": true,
+      "replace_spaces_with": "-",
+      "strip_non_alnum": true,
+      "collapse_repeated_dashes": true
+    },
+    "claim_norms": {
+      "id_construction": "claim-<descriptive-slug>",
+      "example": "claim-btc-bullish-2024"
+    },
+    "entity_norms": {
+      "name": "Preserve human capitalization (e.g., 'BTC', 'Coinbase')",
+      "type": {
+        "case": "lower_snake_case (e.g., 'asset', 'organization', 'financial_instrument')",
+        "plural": "use singular for type (e.g., 'nft' not 'nfts', 'memecoin' not 'memecoins')"
+      },
+      "id_construction": "entity-<type>-<name-slug>",
+      "example": "entity-asset-btc"
+    },
+    "person_norms": {
+      "name": "Preserve human capitalization (e.g., 'Shaun Lim', 'Henghong Lee')",
+      "id_construction": "person-<name-slug>",
+      "example": "person-shaun-lim"
+    }
+  },
+
+  "variable_naming": {
+    "rules": {
+      "syntax": "snake_case ONLY (underscores allowed, NO hyphens)",
+      "reason": "Cypher variable names cannot contain hyphens",
+      "prefixes": {
+        "person": "p_",
+        "claim": "c_",
+        "entity": "e_"
+      }
+    },
+    "patterns": {
+      "person": {
+        "format": "p_<name_slug_with_underscores>",
+        "examples": ["p_henghong", "p_shaun_lim", "p_desmond", "p_wei_li"],
+        "derivation": "Use person ID without 'person-' prefix, replace hyphens with underscores"
+      },
+      "claim": {
+        "format": "c_<topic_slug>",
+        "examples": ["c_btc_bullish", "c_eth_merge", "c_climbing_plans", "c_portfolio_strategy"],
+        "derivation": "Use abbreviated topic from claim, NOT the full claim ID",
+        "max_length": 30
+      },
+      "entity": {
+        "format": "e_<type>_<name_slug>",
+        "examples": ["e_asset_btc", "e_org_coinbase", "e_event_halving", "e_platform_uniswap"],
+        "derivation": "Use entity ID without 'entity-' prefix, replace hyphens with underscores"
+      }
+    }
+  },
+
+  "merging": {
+    "use_merge_for_nodes_and_edges": true,
+    "never_delete": true,
+    "node_merge_rule": "MERGE only on {id}. Set all other properties in ON CREATE SET. Do NOT include other properties inside MERGE clause.",
+    "merge_then_link": {
+      "rule": "ALWAYS MERGE nodes FIRST, then LINK them in separate blocks",
+      "steps": [
+        "1) MERGE all Person nodes with ON CREATE SET for name",
+        "2) MERGE all Entity nodes with ON CREATE SET for name, type, description",
+        "3) MERGE all Claim nodes with ON CREATE SET for text, created_at",
+        "4) MERGE :SAID relationships with created_at and verbatim_texts",
+        "5) MERGE :REACTED relationships with created_at and verbatim_texts",
+        "6) MERGE :MENTION relationships (no properties)"
+      ]
+    }
+  },
+
+  "claim_consolidation": {
+    "objective": "Consolidate related messages into coherent claims while preserving distinct viewpoints",
+    "merge_when": [
+      "Same speaker discussing same topic across multiple messages within chunk",
+      "Topic continuity (e.g., all about 'BTC price prediction')",
+      "Messages are within same conversation thread"
+    ],
+    "keep_separate_when": [
+      "Different topics (even from same speaker)",
+      "Contradictory statements",
+      "Different speakers (NEVER merge claims from different speakers)"
+    ],
+    "max_claims_per_chunk": {
+      "one_on_one_chat": 5,
+      "group_chat": 8,
+      "rationale": "Focus on top assertions/opinions, filter out noise"
+    },
+    "skip_chunk_if": [
+      "Only coordination messages (meeting times, payment confirmations)",
+      "Only greetings/goodbyes with no substantive content",
+      "Only emojis/reactions without text",
+      "Chunk content is empty or whitespace only"
+    ]
+  },
+
+  "edge_case_handling": {
+    "missing_timestamps": {
+      "rule": "Use chunk metadata timestamp as fallback",
+      "priority": [
+        "1. Individual message timestamp (if available)",
+        "2. Chunk metadata.timestamp_range.start",
+        "3. Current processing time (last resort)"
+      ],
+      "format": "Unix timestamp (seconds since epoch)"
+    },
+    "unknown_speakers": {
+      "rule": "Create placeholder person nodes",
+      "id_format": "person-unknown-<number>",
+      "name_format": "Unknown User <number>"
+    },
+    "extracted_entities_missing": {
+      "rule": "Proceed with only Person and Claim nodes",
+      "note": "No Entity nodes or :MENTION relationships created"
+    },
+    "empty_or_coordination_only": {
+      "rule": "Output empty string (no Cypher)",
+      "examples": [
+        "See you at 3pm / Ok!",
+        "Thanks for the payment",
+        "👍 (emoji only)"
+      ]
+    }
+  },
+
+  "entity_extraction_integration": {
+    "data_source": "chunk.metadata.extracted_entities (array of {name, type, description?})",
+    "entity_node_creation": "Create Entity node for each entry in extracted_entities",
+    "name_preservation": "Use EXACT name from extracted_entities (preserve capitalization)",
+    "type_normalization": "Convert to lower_snake_case, singular",
+    "mention_detection": {
+      "method": "Case-insensitive substring match",
+      "rule": "Create :MENTION from Claim to Entity if entity.name appears in claim.text"
+    }
+  },
+
+  "temporal_handling": {
+    "property_name": "created_at",
+    "format": "Unix timestamp (integer, seconds since epoch)",
+    "claim_timestamp": "Use timestamp of earliest message in consolidated claim",
+    "relationship_timestamp": "Use timestamp of earliest message in relationship"
+  },
+
+  "formatting": {
+    "indentation": "2 spaces per level",
+    "section_order": [
+      "1. Person nodes (all speakers in chunk)",
+      "2. Entity nodes (from extracted_entities)",
+      "3. Claim nodes",
+      "4. SAID relationships (speaker -> claim)",
+      "5. REACTED relationships (reactors -> claim)",
+      "6. MENTION relationships (claim -> entity/person)"
+    ],
+    "section_separators": "Double newline (\\n\\n) between sections",
+    "section_headers": [
+      "// 1. Person nodes",
+      "// 2. Entity nodes",
+      "// 3. Claim nodes",
+      "// 4. SAID relationships",
+      "// 5. REACTED relationships",
+      "// 6. MENTION relationships"
+    ],
+    "grouping": [
+      "Always ensure balanced square brackets in arrays",
+      "Always ensure balanced curly braces in property maps",
+      "Group all statements by section",
+      "No semicolons between statements"
+    ],
+    "complete_example": "// 1. Person nodes\nMERGE (p_shaun_lim:Person {id: \"person-shaun-lim\"})\n  ON CREATE SET p_shaun_lim.name = \"Shaun Lim\"\nMERGE (p_henghong_lee:Person {id: \"person-henghong-lee\"})\n  ON CREATE SET p_henghong_lee.name = \"Henghong Lee\"\n\n// 2. Entity nodes\nMERGE (e_asset_btc:Entity {id: \"entity-asset-btc\"})\n  ON CREATE SET\n    e_asset_btc.name = \"BTC\",\n    e_asset_btc.type = \"asset\",\n    e_asset_btc.description = \"Bitcoin cryptocurrency\"\n\n// 3. Claim nodes\nMERGE (c_btc_bullish:Claim {id: \"claim-btc-bullish\"})\n  ON CREATE SET\n    c_btc_bullish.text = \"Bitcoin will reach new all-time highs in 2024\",\n    c_btc_bullish.created_at = 1704067200\n\n// 4. SAID relationships\nMERGE (p_shaun_lim)-[:SAID {\n  created_at: 1704067200,\n  verbatim_texts: [\"BTC is going to moon\", \"We're definitely hitting ATH this year\"]\n}]->(c_btc_bullish)\n\n// 5. REACTED relationships\nMERGE (p_henghong_lee)-[:REACTED {\n  created_at: 1704067260,\n  verbatim_texts: [\"Agreed!\", \"Very bullish on this\"]\n}]->(c_btc_bullish)\n\n// 6. MENTION relationships\nMERGE (c_btc_bullish)-[:MENTION]->(e_asset_btc)"
+  },
+
+  "consistency_and_idempotency": {
+    "core_principle": "Same input chunk MUST produce identical Cypher output every time",
+    "deterministic_ids": {
+      "rule": "IDs must be derived deterministically from content",
+      "use_descriptive_slugs": true,
+      "no_random_strings": true,
+      "no_uuids": true
+    },
+    "array_ordering": {
+      "verbatim_texts": "MUST be ordered chronologically by message timestamp",
+      "mention_relationships": "Order by entity type, then alphabetically"
+    }
+  },
+
+  "saids": {
+    "rules": [
+      "Only include :SAID relationships for the originating speaker",
+      "Each claim MUST have exactly one :SAID from the originating speaker",
+      "All commentary from the originating speaker about this claim should be consolidated into this :SAID relationship",
+      "There should only be one :SAID relationship per person per claim",
+      "verbatim_texts property MUST be an array containing all verbatim text related to the claim, ordered chronologically"
+    ],
+    "correct_examples": [
+      "MERGE (p)-[:SAID {created_at: 123, verbatim_texts: [\"msg1\"]}]->(c)",
+      "MERGE (p)-[:SAID {created_at: 123, verbatim_texts: [\"msg1\", \"msg2\"]}]->(c)",
+      "MERGE (p)-[:SAID {created_at: 123, verbatim_texts: [\"msg1\", \"msg2\", \"msg3\"]}]->(c)"
+    ],
+    "wrong_examples": [
+      "MERGE (p)-[:SAID {created_at: 123, verbatim_texts: [\"msg1\", \"msg2\"}]->(c)  // Missing ]",
+      "MERGE (p)-[:SAID {created_at: 123, verbatim_texts: [\"msg1\"->(c)  // Missing ]",
+      "MERGE (p)-[:SAID {created_at: 123, verbatim_texts: \"msg1\"}]->(c)  // Not an array"
+    ]
+  },
+
+  "reacteds": {
+    "rules": [
+      "Proactively look for evidence of responses/reactions to claims and include them as :REACTED relationships",
+      "Multiple :REACTED relationships can be attached to a single claim (from different people)",
+      "There should only be ONE :REACTED relationship per person per claim",
+      "verbatim_texts property MUST be an array containing all verbatim text related to this reaction, ordered chronologically"
+    ],
+    "correct_examples": [
+      "MERGE (p)-[:REACTED {created_at: 456, verbatim_texts: [\"Agreed!\"]}]->(c)",
+      "MERGE (p)-[:REACTED {created_at: 456, verbatim_texts: [\"Agreed!\", \"So true\"]}]->(c)",
+      "MERGE (p)-[:REACTED {created_at: 456, verbatim_texts: [\"haha so petty\"]}]->(c)"
+    ],
+    "wrong_examples": [
+      "MERGE (p)-[:REACTED {created_at: 456, verbatim_texts: [\"Agreed!\"}->(c)  // Missing ]",
+      "MERGE (p)-[:REACTED {created_at: 456, verbatim_texts: [\"haha so petty\"]}->(c)  // WRONG - check closing bracket placement"
+    ]
+  },
+
+  "mentions": {
+    "rules": [
+      "Use :MENTION only from Claim to (Person or Entity) referenced in the claim text",
+      "Claims may :MENTION multiple people",
+      "Claims may :MENTION multiple entities",
+      "NEVER create :MENTION from Person to anything"
+    ]
+  }
+}
