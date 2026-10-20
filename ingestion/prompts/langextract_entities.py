@@ -5,6 +5,8 @@ This file contains the prompt definition and examples for extracting entities
 from cryptocurrency and finance-related chat conversations.
 """
 
+import os
+
 import langextract as lx
 
 # Define crypto-specific entity extraction prompt
@@ -121,7 +123,8 @@ LANGEXTRACT_EXAMPLES = [
 ]
 
 # Model configuration
-LANGEXTRACT_MODEL_ID = "gpt-4o-mini"
+# Override with the LANGEXTRACT_MODEL_ID env var (e.g. "llama3.2:3b" for local Ollama)
+LANGEXTRACT_MODEL_ID = os.getenv("LANGEXTRACT_MODEL_ID", "gpt-4o-mini")
 # LANGEXTRACT_MODEL_ID = "gpt-5-nano"
 # LANGEXTRACT_MODEL_ID = "gemini-2.5-pro"
 # Alternative models:
