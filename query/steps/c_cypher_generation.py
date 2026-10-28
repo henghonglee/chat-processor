@@ -73,7 +73,7 @@ class CypherGenerator(BaseQueryStep):
                 OPTIONAL MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
                 OPTIONAL MATCH mention = (c)-[:MENTION]->(e)
                 RETURN c, path, mention, e, p
-                ORDER BY c.valid_at DESC
+                ORDER BY c.created_at DESC
                 """,
             "claim_by_id": """
                 MATCH (c:Claim)
@@ -81,7 +81,7 @@ class CypherGenerator(BaseQueryStep):
                 OPTIONAL MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
                 OPTIONAL MATCH mention = (c)-[:MENTION]->(e:Entity)
                 RETURN c, path, mention, e, p
-                ORDER BY c.valid_at DESC
+                ORDER BY c.created_at DESC
                 """,
             "full_text_by_id": """
                 MATCH (c:Claim)
@@ -89,25 +89,25 @@ class CypherGenerator(BaseQueryStep):
                 OPTIONAL MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
                 OPTIONAL MATCH mention = (c)-[:MENTION]->(e:Entity)
                 RETURN c, path, mention, e, p
-                ORDER BY c.valid_at DESC
+                ORDER BY c.created_at DESC
             """,
             "person_by_short_name_and_search_text": """
                 MATCH (p:Person)
                 WHERE p.id CONTAINS $person_id
                 OPTIONAL MATCH path = (p)-[r:SAID|REACTED]->(c:Claim)
-                WHERE ANY(txt IN r.full_text WHERE ANY(search_term IN $search_text WHERE toLower(txt) CONTAINS toLower(search_term)))
-                OR ANY(search_term IN $search_text WHERE toLower(c.summary_text) CONTAINS toLower(search_term))
+                WHERE ANY(txt IN r.verbatim_texts WHERE ANY(search_term IN $search_text WHERE toLower(txt) CONTAINS toLower(search_term)))
+                OR ANY(search_term IN $search_text WHERE toLower(c.text) CONTAINS toLower(search_term))
                 OPTIONAL MATCH mention = (c)-[:MENTION]->(e)
                 RETURN c, path, mention, e
-                ORDER BY c.valid_at DESC
+                ORDER BY c.created_at DESC
                 """,
             "claims_containing_search_terms": """
                 MATCH (c:Claim)
-                WHERE ANY(search_term IN $search_text WHERE toLower(c.summary_text) CONTAINS toLower(search_term))
+                WHERE ANY(search_term IN $search_text WHERE toLower(c.text) CONTAINS toLower(search_term))
                 OPTIONAL MATCH path = (p:Person)-[r:SAID|REACTED]->(c)
                 OPTIONAL MATCH mention = (c)-[:MENTION]->(e)
                 RETURN c, path, mention, e, p
-                ORDER BY c.valid_at DESC
+                ORDER BY c.created_at DESC
                 """,
         }
 

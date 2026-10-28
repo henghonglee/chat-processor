@@ -105,6 +105,38 @@ def sanitize_node_variable(identifier: str) -> str:
     return identifier.replace("-", "_")
 
 
+def split_into_logical_statements(raw_cypher: str) -> List[str]:
+    """
+    Split a Cypher blob into logical statements, each starting at an
+    unindented "MERGE" line and including every following indented
+    continuation line (e.g. "ON CREATE SET" and its property assignments).
+
+    A naive split on lines starting with "MERGE" drops those continuation
+    lines entirely, which silently strips every ON CREATE SET property
+    (name, type, text, created_at, ...) from the node and leaves bare
+    "MERGE (...) ON CREATE SET" statements with no properties - which is
+    also invalid Cypher on its own (a dangling SET with nothing after it).
+    """
+    statements: List[str] = []
+    current: List[str] = []
+    for line in raw_cypher.strip().split("\n"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        starts_new_statement = (
+            not line[:1].isspace() and stripped.upper().startswith("MERGE")
+        )
+        if starts_new_statement:
+            if current:
+                statements.append("\n".join(current))
+            current = [stripped]
+        elif current:
+            current.append(stripped)
+    if current:
+        statements.append("\n".join(current))
+    return statements
+
+
 def sanitize_said_and_mention_relationships(raw_cypher: str) -> str:
     """
     Remove MENTION relationships where the same person already has a SAID relationship
@@ -114,12 +146,7 @@ def sanitize_said_and_mention_relationships(raw_cypher: str) -> str:
     If we have (p2)-[:SAID]->(c3) and (c3)-[:MENTION]->(p2),
     then remove the MENTION relationship since SAID takes precedence.
     """
-    # Split raw_cypher into individual statements - each line starting with MERGE
-    statements = []
-    for line in raw_cypher.strip().split("\n"):
-        line = line.strip()
-        if line and line.upper().startswith("MERGE"):
-            statements.append(line)
+    statements = split_into_logical_statements(raw_cypher)
 
     # Parse all statements to find SAID and MENTION relationships
     said_relationships = set()  # (person_var, claim_var)
@@ -375,9 +402,9 @@ def load_processed_cypher(cypher_file: Path) -> List[str]:
     if not content:
         return []
 
-    # Split on individual lines for processed statements
-    statements = [stmt.strip() for stmt in content.split("\n") if stmt.strip()]
-    return statements
+    # Split into logical statements (each MERGE plus its ON CREATE SET
+    # continuation lines), not naively on every newline.
+    return split_into_logical_statements(content)
 
 
 def execute_cypher_statements(
@@ -385,6 +412,15 @@ def execute_cypher_statements(
 ) -> Tuple[int, int]:
     """
     Execute Cypher statements against Neo4j.
+
+    All statements for a chunk are run as a single query (not one session.run()
+    per line). Relationship MERGEs reference their endpoints by the bare
+    variable name declared a few lines earlier (e.g. "MERGE (p_alice)-[:SAID]->
+    (c_btc)"), and Cypher variable bindings only persist within one query's
+    scope, not across separate session.run() calls. Running each line
+    separately silently created a brand-new blank node for every such
+    reference instead of linking to the already-merged Person/Entity/Claim
+    node, leaving the graph fully disconnected.
 
     Args:
         statements: List of Cypher statements to execute
@@ -409,37 +445,38 @@ def execute_cypher_statements(
 
     successful = 0
     failed = 0
+    combined_query = "\n".join(statements)
 
     try:
         driver = GraphDatabase.driver(uri, auth=(user, password))
 
         with driver.session() as session:
-            for i, statement in enumerate(statements, 1):
-                try:
-                    print(f"   Executing statement {i}/{len(statements)}...")
-                    result = session.run(statement)
+            try:
+                print(
+                    f"   Executing {len(statements)} statement(s) for chunk {chunk_id} as one query..."
+                )
+                result = session.run(combined_query)
 
-                    # Consume the result to ensure it's executed
-                    summary = result.consume()
+                # Consume the result to ensure it's executed
+                summary = result.consume()
 
-                    # Log execution details
-                    if hasattr(summary, "counters"):
-                        counters = summary.counters
-                        if (
-                            counters.nodes_created > 0
-                            or counters.relationships_created > 0
-                        ):
-                            print(
-                                f"     ✓ Created {counters.nodes_created} nodes, {counters.relationships_created} relationships"
-                            )
+                # Log execution details
+                if hasattr(summary, "counters"):
+                    counters = summary.counters
+                    if (
+                        counters.nodes_created > 0
+                        or counters.relationships_created > 0
+                    ):
+                        print(
+                            f"     ✓ Created {counters.nodes_created} nodes, {counters.relationships_created} relationships"
+                        )
 
-                    successful += 1
+                successful = len(statements)
 
-                except Exception as e:
-                    print(f"     ❌ Statement {i} failed: {e}")
-                    print(f"     Statement: {statement[:100]}...")
-                    failed += 1
-                    continue
+            except Exception as e:
+                print(f"     ❌ Chunk {chunk_id} failed: {e}")
+                print(f"     Query: {combined_query[:200]}...")
+                failed = len(statements)
 
         driver.close()
 
@@ -477,12 +514,9 @@ def process_single_chunk_post_processing(
 
         print(f"   📄 Read {len(raw_cypher)} characters")
 
-        # Split into individual statements
-        statements = []
-        for line in raw_cypher.strip().split("\n"):
-            line = line.strip()
-            if line and line.upper().startswith("MERGE"):
-                statements.append(line)
+        # Split into individual logical statements (each MERGE plus its
+        # continuation lines, e.g. ON CREATE SET property assignments)
+        statements = split_into_logical_statements(raw_cypher)
         print(f"   📝 Split into: {len(statements)} statements")
 
         # Sanitize relationships
