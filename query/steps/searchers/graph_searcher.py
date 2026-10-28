@@ -72,9 +72,9 @@ class GraphSearcher(BaseSearcher):
                     result = session.run(cypher_query, term=term)
                     
                     for record in result:
-                        person_id = record.get("id", "")
-                        person_name = record.get("name", "")
-                        person_description = record.get("description", "")
+                        person_id = record.get("id") or ""
+                        person_name = record.get("name") or ""
+                        person_description = record.get("description") or ""
                         
                         # Create document text from available fields
                         doc_parts = []
